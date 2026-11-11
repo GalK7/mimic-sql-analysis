@@ -1,0 +1,12 @@
+# MIMIC data is not redistributed in this repository
+*.csv
+*.csv.gz
+*.zip
+mimic-iv-demo/
+
+# Local / editor files
+.dbeaver/
+.project
+*.bak
+.DS_Store
+Thumbs.db
