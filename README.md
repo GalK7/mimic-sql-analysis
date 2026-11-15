@@ -1,6 +1,6 @@
 # mimic-sql-analysis
 
-SQL analyses of hospital admission and ICU data from the MIMIC-IV Clinical Database Demo. Each query answers a question that hospitals and health organizations routinely track, such as readmissions and length of stay. The repository contains code only; the data is not included.
+SQL analyses of hospital admission and ICU data from the MIMIC-IV Clinical Database Demo. Each query answers a question that hospitals and health organizations routinely track, such as readmissions, ICU length of stay and in-hospital mortality. The repository contains code only; the data is not included.
 
 ## Requirements
 
@@ -15,6 +15,8 @@ SQL analyses of hospital admission and ICU data from the MIMIC-IV Clinical Datab
 | `setup/load_mimic.sql` | Creates the `mimic` database and loads the demo tables into the schemas `mimiciv_hosp` and `mimiciv_icu`. |
 | `01_readmission_rate.sql` | 30-day readmission rate. |
 | `02_icu_los_by_unit.sql` | ICU length of stay and in-hospital mortality by care unit. |
+| `03_mortality_by_age.sql` | In-hospital mortality and ICU admission by age group. |
+| `04_lactate_mortality.sql` | In-hospital mortality by maximum lactate in the first 24 hours of ICU care. |
 
 ## Setup
 
@@ -36,6 +38,17 @@ MIMIC shifts all dates to the years 2100–2200 for de-identification. Intervals
 | --- | --- | --- |
 | `01_readmission_rate.sql` | What share of discharges is followed by a readmission within 30 days? | CTEs, `LAG` window function, date arithmetic, `CASE WHEN`, `FILTER` |
 | `02_icu_los_by_unit.sql` | How long are ICU stays in each care unit, and what share of admissions with an ICU stay ends in in-hospital death? | CTE, `JOIN`, `ROW_NUMBER` window function, `PERCENTILE_CONT`, `FILTER` |
+| `03_mortality_by_age.sql` | How do in-hospital mortality and the share of admissions with an ICU stay change with age? | Date functions (`EXTRACT`), `CASE WHEN`, `LEFT JOIN`, `SELECT DISTINCT`, `FILTER` |
+| `04_lactate_mortality.sql` | Is a high lactate in the first 24 hours of ICU care associated with in-hospital mortality? | `ROW_NUMBER`, `LEFT JOIN` with a time window (`INTERVAL`), `CASE WHEN` with missing values |
+
+## Key Findings
+
+- About one in five discharges (20.4%) was followed by a readmission within 30 days.
+- All 15 in-hospital deaths occurred in admissions that included an ICU stay.
+- In-hospital mortality rose with age up to the 65–79 group, and with first-day ICU lactate: from 14.3% with normal lactate to 30.8% with lactate of 4 mmol/L or more.
+- The demo includes 100 patients, so these values describe the sample and not the hospital population.
+
+## Results
 
 ### 01 – 30-day readmission rate
 
@@ -68,3 +81,29 @@ Length of stay is calculated per ICU stay. An admission can include more than on
 | Neuro Intermediate | 1 | 0.9 | 0.9 | 1 | 0 | 0.0% |
 
 All 15 in-hospital deaths in the demo occurred in admissions that included an ICU stay. The three neuro units have one to three stays each, so their values are not informative.
+
+### 03 – Mortality and ICU admission by age group
+
+Age at admission is calculated from the year of admission and MIMIC's de-identified age reference (`anchor_age` at `anchor_year`). Each admission is counted once.
+
+| Age group | Admissions | With ICU stay | ICU stay (%) | Deaths | Mortality |
+| --- | --- | --- | --- | --- | --- |
+| Under 40 | 14 | 9 | 64.3% | 0 | 0.0% |
+| 40–64 | 145 | 61 | 42.1% | 5 | 3.4% |
+| 65–79 | 71 | 34 | 47.9% | 7 | 9.9% |
+| 80 and over | 45 | 24 | 53.3% | 3 | 6.7% |
+
+Mortality rises from the youngest group to the 65–79 group. The lower value in the oldest group rests on 3 deaths, and the youngest group includes 14 admissions, so neither difference is informative.
+
+### 04 – First-day ICU lactate and mortality
+
+For each admission, the first ICU stay is used. The maximum blood lactate (itemid 50813 in `d_labitems`, mmol/L) measured within 24 hours of ICU admission is taken. Stays with no lactate measurement in that window form a separate group.
+
+| Maximum lactate (mmol/L) | Admissions | Deaths | Mortality |
+| --- | --- | --- | --- |
+| Not measured | 50 | 1 | 2.0% |
+| Normal (under 2) | 35 | 5 | 14.3% |
+| Elevated (2–4) | 30 | 5 | 16.7% |
+| High (4 and over) | 13 | 4 | 30.8% |
+
+Mortality rises with lactate. Admissions without a lactate measurement have the lowest mortality, which fits lactate being ordered mainly when a serious condition is suspected, so a missing value is itself informative. The high-lactate group includes 13 admissions, so its estimate is imprecise.
